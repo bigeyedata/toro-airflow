@@ -10,20 +10,24 @@ from airflow.utils.decorators import apply_defaults
 
 class UpsertFreshnessMetricOperator(BaseOperator):
 
-    class FreshnessConfig(TypedDict, total=False):
-        schema_name: str
-        table_name: str
-        column_name: str
-        hours_between_update: int
-        hours_delay_at_update: int
-        notifications: List[str]
-        default_check_frequency_hours: int
+    # Only for Python 3.8+
+    # TODO - find a way to check what Python version is running
+    # class FreshnessConfig(TypedDict, total=False):
+    #     schema_name: str
+    #     table_name: str
+    #     column_name: str
+    #     hours_between_update: int
+    #     hours_delay_at_update: int
+    #     notifications: List[str]
+    #     default_check_frequency_hours: int
 
     @apply_defaults
     def __init__(self,
                  connection_id: str,
                  warehouse_id: int,
-                 configuration: List[FreshnessConfig],
+                 configuration: dict(schema_name=None, table_name=None, column_name=None,
+                                     hours_between_update=None, hours_delay_at_update=None,
+                                     extras=...),
                  *args,
                  **kwargs):
         super(UpsertFreshnessMetricOperator, self).__init__(*args, **kwargs)
