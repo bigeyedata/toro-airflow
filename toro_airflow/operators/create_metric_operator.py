@@ -16,6 +16,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                  column_name,
                  hours_between_update,
                  hours_delay_at_update,
+                 notifications=[],
                  *args,
                  **kwargs):
         super(UpsertFreshnessMetricOperator, self).__init__(*args, **kwargs)
@@ -25,6 +26,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
         self.schema_name = schema_name
         self.hours_between_update = hours_between_update
         self.hours_delay_at_update = hours_delay_at_update
+        self.notifications = notifications
 
     def execute(self, context):
         table_id = self._get_table_id_for_name()
@@ -81,7 +83,8 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             "lookback": {
                 "intervalType": "DAYS_TIME_INTERVAL_TYPE",
                 "intervalValue": 14
-            }
+            },
+            "notificationChannels": self._get_notification_channels()
         }
         if existing_metric is None:
             return metric
@@ -119,4 +122,11 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                 return t['id']
         return None
 
-
+    def _get_notification_channels(self):
+        channels = []
+        for n in self.notifications:
+            if n.startswith('#') or n.startswith('@'):
+                channels.append({"slackChannel": n})
+            elif n.contains('@') and n.contains('.'):
+                channels.append({"email": n})
+        return channels
