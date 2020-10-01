@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="toro-airflow",  # Replace with your own username
-    version="0.0.1",
+    version="0.0.2",
     author="Toro Data Labs, Inc",
     author_email="support@torodata.io",
     description="Airflow operators to be used with Toro",
