@@ -10,7 +10,7 @@ from airflow.utils.decorators import apply_defaults
 
 class UpsertFreshnessMetricOperator(BaseOperator):
 
-    class FreshnessConfig(TypedDict):
+    class FreshnessConfig(TypedDict, total=False):
         schema_name: str
         table_name: str
         column_name: str
@@ -33,13 +33,13 @@ class UpsertFreshnessMetricOperator(BaseOperator):
 
     def execute(self, context):
         for c in self.configuration:
-            table_name = c.get("table_name")
-            schema_name = c.get("schema_name")
-            column_name = c.get("column_name")
-            hours_between_update = c.get("hours_between_update")
-            hours_delay_at_update = c.get("hours_delay_at_update")
-            default_check_frequency_hours = c.get("default_check_frequency_hours")
-            notifications = c.get("notifications")
+            table_name = c["table_name"]
+            schema_name = c["schema_name"]
+            column_name = c["column_name"]
+            hours_between_update = c["hours_between_update"]
+            hours_delay_at_update = c["hours_delay_at_update"]
+            default_check_frequency_hours = c.get("default_check_frequency_hours", 2)
+            notifications = c.get("notifications", [])
             table = self._get_table_for_name(schema_name, table_name)
             if table is None or table.get("id") is None:
                 raise Exception("Could not find table: ", self.schema_name, self.table_name)
