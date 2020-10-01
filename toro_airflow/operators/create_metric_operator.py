@@ -1,7 +1,6 @@
 import logging
 import json
 from functools import reduce
-from typing import TypedDict, List
 
 from airflow.hooks.http_hook import HttpHook
 from airflow.operators.bash_operator import BaseOperator
@@ -25,9 +24,9 @@ class UpsertFreshnessMetricOperator(BaseOperator):
     def __init__(self,
                  connection_id: str,
                  warehouse_id: int,
-                 configuration: dict(schema_name=None, table_name=None, column_name=None,
+                 configuration: list(dict(schema_name=None, table_name=None, column_name=None,
                                      hours_between_update=None, hours_delay_at_update=None,
-                                     extras=...),
+                                     extras=...)),
                  *args,
                  **kwargs):
         super(UpsertFreshnessMetricOperator, self).__init__(*args, **kwargs)
@@ -46,17 +45,17 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             notifications = c.get("notifications", [])
             table = self._get_table_for_name(schema_name, table_name)
             if table is None or table.get("id") is None:
-                raise Exception("Could not find table: ", self.schema_name, self.table_name)
-            existing_metric = self._get_existing_freshness_metric(table)
+                raise Exception("Could not find table: ", schema_name, table_name)
+            existing_metric = self._get_existing_freshness_metric(table, column_name)
             metric = self._get_metric_object(existing_metric, table, notifications, column_name,
                                              hours_between_update, hours_delay_at_update, default_check_frequency_hours)
-            logging.info("Sending metric to create: ", metric)
+            logging.info("Sending metric to create: %s", metric)
             hook = self.get_hook('POST')
             result = hook.run("api/v1/metrics",
                               headers={"Content-Type": "application/json", "Accept": "application/json"},
                               data=json.dumps(metric))
-            logging.info("Create metric status: ", result.status_code)
-            logging.info("Create result: ", result.json())
+            logging.info("Create metric status: %s", result.status_code)
+            logging.info("Create result: %s", result.json())
 
     def get_hook(self, method) -> HttpHook:
         return HttpHook(http_conn_id=self.connection_id, method=method)
@@ -113,7 +112,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             existing_metric["scheduleFrequency"] = metric["scheduleFrequency"]
             return existing_metric
 
-    def _get_existing_freshness_metric(self, table):
+    def _get_existing_freshness_metric(self, table, column_name):
         hook = self.get_hook('GET')
         result = hook.run("api/v1/metrics?warehouseIds={warehouse_id}&tableIds={table_id}"
                           .format(warehouse_id=self.warehouse_id,
@@ -121,9 +120,12 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                           headers={"Accept": "application/json"})
         metrics = result.json()
         for m in metrics:
-            if self._is_latency_metric(m):
+            if self._is_latency_metric(m) and self._is_same_column_metric(m, column_name):
                 return m
         return None
+
+    def _is_same_column_metric(self, m, column_name):
+        return m["parameters"][0].get("columnName") == column_name
 
     def _is_latency_metric(self, metric):
         keys = ["metricType", "predefinedMetric", "metricName"]
