@@ -29,11 +29,11 @@ class UpsertFreshnessMetricOperator(BaseOperator):
         self.notifications = notifications
 
     def execute(self, context):
-        table_id = self._get_table_id_for_name()
-        if table_id is None:
+        table = self._get_table_for_name()
+        if table is None or table.get("id") is None:
             raise Exception("Could not find table: ", self.schema_name, self.table_name)
-        existing_metric = self._get_existing_freshness_metric(table_id)
-        metric = self._get_metric_object(existing_metric, table_id)
+        existing_metric = self._get_existing_freshness_metric(table)
+        metric = self._get_metric_object(existing_metric, table)
         print(metric)
         hook = HttpHook(http_conn_id='toro_connection', method='POST')
         result = hook.run("api/v1/metrics",
@@ -43,7 +43,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
         print("Status code: ", result.status_code)
         print("Result: ", result.json())
 
-    def _get_metric_object(self, existing_metric, table_id):
+    def _get_metric_object(self, existing_metric, table):
         metric = {
             "scheduleFrequency": {
                 "intervalType": "HOURS_TIME_INTERVAL_TYPE",
@@ -68,10 +68,10 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                 }
             ],
             "warehouseId": self.warehouse_id,
-            "datasetId": table_id,
+            "datasetId": table.get("id"),
             "metricType": {
                 "predefinedMetric": {
-                    "metricName": "HOURS_SINCE_MAX_TIMESTAMP"
+                    "metricName": self._get_metric_name_for_field()
                 }
             },
             "parameters": [
@@ -93,11 +93,11 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             existing_metric["notificationChannels"] = metric.get("notificationChannels", [])
             return existing_metric
 
-    def _get_existing_freshness_metric(self, table_id):
+    def _get_existing_freshness_metric(self, table):
         hook = HttpHook(http_conn_id='toro_connection', method='GET')
         result = hook.run("api/v1/metrics?warehouseIds={warehouse_id}&tableIds={table_id}"
                           .format(warehouse_id=self.warehouse_id,
-                                  table_id=table_id),
+                                  table_id=table.get("id")),
                           headers={"Accept": "application/json"})
         metrics = result.json()
         for m in metrics:
@@ -108,9 +108,9 @@ class UpsertFreshnessMetricOperator(BaseOperator):
     def _is_latency_metric(self, metric):
         keys = ["metricType", "predefinedMetric", "metricName"]
         result = reduce(lambda val, key: val.get(key) if val else None, keys, metric)
-        return result is not None
+        return result is not None and result.startswith("HOURS_SINCE_MAX")
 
-    def _get_table_id_for_name(self):
+    def _get_table_for_name(self):
         hook = HttpHook(http_conn_id='toro_connection', method='GET')
         result = hook.run("dataset/tables/{warehouse_id}/{schema_name}"
                           .format(warehouse_id=self.warehouse_id,
@@ -119,7 +119,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
         tables = result.json()
         for t in tables:
             if t['datasetName'].lower() == self.table_name.lower():
-                return t['id']
+                return t
         return None
 
     def _get_notification_channels(self):
@@ -130,3 +130,11 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             elif n.contains('@') and n.contains('.'):
                 channels.append({"email": n})
         return channels
+
+    def _get_metric_name_for_field(self, table):
+        for f in table.get("fields"):
+            if f.get("fieldName").lower() == self.column_name.lower():
+                if f.get("type") == "TIMESTAMP_LIKE":
+                    return "HOURS_SINCE_MAX_TIMESTAMP"
+                elif f.get("type") == "DATE_LIKE":
+                    return "HOURS_SINCE_MAX_DATE"
