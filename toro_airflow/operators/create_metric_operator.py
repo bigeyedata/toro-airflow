@@ -25,8 +25,8 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                  connection_id: str,
                  warehouse_id: int,
                  configuration: list(dict(schema_name=None, table_name=None, column_name=None,
-                                     hours_between_update=None, hours_delay_at_update=None,
-                                     extras=...)),
+                                          update_schedule=None,
+                                          extras=...)),
                  *args,
                  **kwargs):
         super(UpsertFreshnessMetricOperator, self).__init__(*args, **kwargs)
@@ -39,16 +39,16 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             table_name = c["table_name"]
             schema_name = c["schema_name"]
             column_name = c["column_name"]
-            hours_between_update = c["hours_between_update"]
-            hours_delay_at_update = c["hours_delay_at_update"]
             default_check_frequency_hours = c.get("default_check_frequency_hours", 2)
+            update_schedule = c["update_schedule"]
+            timezone = c.get("timezone", "UTC")
             notifications = c.get("notifications", [])
             table = self._get_table_for_name(schema_name, table_name)
             if table is None or table.get("id") is None:
                 raise Exception("Could not find table: ", schema_name, table_name)
             existing_metric = self._get_existing_freshness_metric(table, column_name)
             metric = self._get_metric_object(existing_metric, table, notifications, column_name,
-                                             hours_between_update, hours_delay_at_update, default_check_frequency_hours)
+                                             update_schedule, timezone, default_check_frequency_hours)
             logging.info("Sending metric to create: %s", metric)
             hook = self.get_hook('POST')
             result = hook.run("api/v1/metrics",
@@ -61,7 +61,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
         return HttpHook(http_conn_id=self.connection_id, method=method)
 
     def _get_metric_object(self, existing_metric, table, notifications, column_name,
-                           hours_between_update, hours_delay_at_update, default_check_frequency_hours):
+                           update_schedule, timezone, default_check_frequency_hours):
         metric = {
             "scheduleFrequency": {
                 "intervalType": "HOURS_TIME_INTERVAL_TYPE",
@@ -69,19 +69,23 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             },
             "thresholds": [
                 {
-                    "constantThreshold": {
+                    "freshnessScheduleThreshold": {
                         "bound": {
                             "boundType": "UPPER_BOUND_SIMPLE_BOUND_TYPE",
-                            "value": hours_between_update + hours_delay_at_update
-                        }
+                            "value": -1
+                        },
+                        "cron": update_schedule,
+                        "timezone": timezone
                     }
                 },
                 {
-                    "constantThreshold": {
+                    "freshnessScheduleThreshold": {
                         "bound": {
                             "boundType": "LOWER_BOUND_SIMPLE_BOUND_TYPE",
-                            "value": hours_delay_at_update
-                        }
+                            "value": -1
+                        },
+                        "cron": update_schedule,
+                        "timezone": timezone
                     }
                 }
             ],
