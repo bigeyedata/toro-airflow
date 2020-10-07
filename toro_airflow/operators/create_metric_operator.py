@@ -153,7 +153,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
         for n in notifications:
             if n.startswith('#') or n.startswith('@'):
                 channels.append({"slackChannel": n})
-            elif n.contains('@') and n.contains('.'):
+            elif '@' in n and '.' in n:
                 channels.append({"email": n})
         return channels
 
