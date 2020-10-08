@@ -41,6 +41,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             column_name = c["column_name"]
             default_check_frequency_hours = c.get("default_check_frequency_hours", 2)
             update_schedule = c["update_schedule"]
+            delay_at_update = c.get("delay_at_update", "0 minutes")
             timezone = c.get("timezone", "UTC")
             notifications = c.get("notifications", [])
             table = self._get_table_for_name(schema_name, table_name)
@@ -48,7 +49,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                 raise Exception("Could not find table: ", schema_name, table_name)
             existing_metric = self._get_existing_freshness_metric(table, column_name)
             metric = self._get_metric_object(existing_metric, table, notifications, column_name,
-                                             update_schedule, timezone, default_check_frequency_hours)
+                                             update_schedule, delay_at_update, timezone, default_check_frequency_hours)
             logging.info("Sending metric to create: %s", metric)
             hook = self.get_hook('POST')
             result = hook.run("api/v1/metrics",
@@ -61,7 +62,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
         return HttpHook(http_conn_id=self.connection_id, method=method)
 
     def _get_metric_object(self, existing_metric, table, notifications, column_name,
-                           update_schedule, timezone, default_check_frequency_hours):
+                           update_schedule, delay_at_update, timezone, default_check_frequency_hours):
         metric = {
             "scheduleFrequency": {
                 "intervalType": "HOURS_TIME_INTERVAL_TYPE",
@@ -75,7 +76,8 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                             "value": -1
                         },
                         "cron": update_schedule,
-                        "timezone": timezone
+                        "timezone": timezone,
+                        "delayAtUpdate": self._get_time_interval_for_delay_string(delay_at_update)
                     }
                 },
                 {
@@ -85,7 +87,8 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                             "value": -1
                         },
                         "cron": update_schedule,
-                        "timezone": timezone
+                        "timezone": timezone,
+                        "delayAtUpdate": self._get_time_interval_for_delay_string(delay_at_update)
                     }
                 }
             ],
@@ -164,3 +167,22 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                     return "HOURS_SINCE_MAX_TIMESTAMP"
                 elif f.get("type") == "DATE_LIKE":
                     return "HOURS_SINCE_MAX_DATE"
+
+    def _get_time_interval_for_delay_string(self, delay_at_update):
+        split_input = delay_at_update.split(" ")
+        interval_value = int(split_input[0])
+        interval_type = split_input[1]
+        return {
+            "intervalValue": interval_value,
+            "intervalType": self._get_proto_interval_type(interval_type)
+        }
+
+    def _get_proto_interval_type(self, interval_type):
+        if "minute" in interval_type:
+            return "MINUTES_TIME_INTERVAL_TYPE"
+        elif "hour" in interval_type:
+            return "HOURS_TIME_INTERVAL_TYPE"
+        elif "weekday" in interval_type:
+            return "WEEKDAYS_TIME_INTERVAL_TYPE"
+        elif "day" in interval_type:
+            return "DAYS_TIME_INTERVAL_TYPE"
