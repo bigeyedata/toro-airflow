@@ -63,6 +63,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
 
     def _get_metric_object(self, existing_metric, table, notifications, column_name,
                            update_schedule, delay_at_update, timezone, default_check_frequency_hours):
+        metric_name = self._get_metric_name_for_field(table, column_name)
         metric = {
             "scheduleFrequency": {
                 "intervalType": "HOURS_TIME_INTERVAL_TYPE",
@@ -77,7 +78,9 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                         },
                         "cron": update_schedule,
                         "timezone": timezone,
-                        "delayAtUpdate": self._get_time_interval_for_delay_string(delay_at_update)
+                        "delayAtUpdate": self._get_time_interval_for_delay_string(delay_at_update,
+                                                                                  metric_name,
+                                                                                  update_schedule)
                     }
                 },
                 {
@@ -88,7 +91,9 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                         },
                         "cron": update_schedule,
                         "timezone": timezone,
-                        "delayAtUpdate": self._get_time_interval_for_delay_string(delay_at_update)
+                        "delayAtUpdate": self._get_time_interval_for_delay_string(delay_at_update,
+                                                                                  metric_name,
+                                                                                  update_schedule)
                     }
                 }
             ],
@@ -96,7 +101,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             "datasetId": table.get("id"),
             "metricType": {
                 "predefinedMetric": {
-                    "metricName": self._get_metric_name_for_field(table, column_name)
+                    "metricName": metric_name
                 }
             },
             "parameters": [
@@ -168,8 +173,10 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                 elif f.get("type") == "DATE_LIKE":
                     return "HOURS_SINCE_MAX_DATE"
 
-    def _get_time_interval_for_delay_string(self, delay_at_update):
+    def _get_time_interval_for_delay_string(self, delay_at_update, metric_name):
         split_input = delay_at_update.split(" ")
+        if metric_name == "HOURS_SINCE_MAX_DATE":
+            interval_value = self._get_max_hours_from_cron(cron)
         interval_value = int(split_input[0])
         interval_type = split_input[1]
         return {
