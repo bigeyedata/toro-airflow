@@ -174,16 +174,21 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                     return "HOURS_SINCE_MAX_DATE"
 
     def _get_time_interval_for_delay_string(self, delay_at_update, metric_name, update_schedule):
+        split_input = delay_at_update.split(" ")
+        interval_value = int(split_input[0])
+        interval_type = self._get_proto_interval_type(split_input[1])
         if metric_name == "HOURS_SINCE_MAX_DATE":
-            interval_value = self._get_max_hours_from_cron(update_schedule)
-            interval_type = "hours"
-        else:
-            split_input = delay_at_update.split(" ")
-            interval_value = int(split_input[0])
-            interval_type = split_input[1]
+            hours_from_cron = self._get_max_hours_from_cron(update_schedule)
+            if interval_type == "HOURS_TIME_INTERVAL_TYPE" or interval_type == "MINUTES_TIME_INTERVAL_TYPE":
+                logging.warning("Delay granularity for date column must be in days, ignoring value")
+                interval_type = "HOURS_TIME_INTERVAL_TYPE"
+                interval_value = hours_from_cron
+            else:
+                interval_type = "HOURS_TIME_INTERVAL_TYPE"
+                interval_value = interval_value * 24 + hours_from_cron
         return {
             "intervalValue": interval_value,
-            "intervalType": self._get_proto_interval_type(interval_type)
+            "intervalType": interval_type
         }
 
     def _get_proto_interval_type(self, interval_type):
