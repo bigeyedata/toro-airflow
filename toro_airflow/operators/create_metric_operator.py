@@ -173,12 +173,14 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                 elif f.get("type") == "DATE_LIKE":
                     return "HOURS_SINCE_MAX_DATE"
 
-    def _get_time_interval_for_delay_string(self, delay_at_update, metric_name):
-        split_input = delay_at_update.split(" ")
+    def _get_time_interval_for_delay_string(self, delay_at_update, metric_name, update_schedule):
         if metric_name == "HOURS_SINCE_MAX_DATE":
-            interval_value = self._get_max_hours_from_cron(cron)
-        interval_value = int(split_input[0])
-        interval_type = split_input[1]
+            interval_value = self._get_max_hours_from_cron(update_schedule)
+            interval_type = "hours"
+        else:
+            split_input = delay_at_update.split(" ")
+            interval_value = int(split_input[0])
+            interval_type = split_input[1]
         return {
             "intervalValue": interval_value,
             "intervalType": self._get_proto_interval_type(interval_type)
@@ -193,3 +195,8 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             return "WEEKDAYS_TIME_INTERVAL_TYPE"
         elif "day" in interval_type:
             return "DAYS_TIME_INTERVAL_TYPE"
+
+    def _get_max_hours_from_cron(self, cron):
+        cron_values = cron.split(" ")
+        hours = cron_values[1]
+        return int(hours.split(",")[-1])
