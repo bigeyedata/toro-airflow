@@ -137,7 +137,7 @@ class UpsertFreshnessMetricOperator(BaseOperator):
         return None
 
     def _is_same_column_metric(self, m, column_name):
-        return m["parameters"][0].get("columnName") == column_name
+        return m["parameters"][0].get("columnName").lower() == column_name.lower()
 
     def _is_latency_metric(self, metric):
         keys = ["metricType", "predefinedMetric", "metricName"]
