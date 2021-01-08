@@ -82,19 +82,6 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                                                                                   metric_name,
                                                                                   update_schedule)
                     }
-                },
-                {
-                    "freshnessScheduleThreshold": {
-                        "bound": {
-                            "boundType": "LOWER_BOUND_SIMPLE_BOUND_TYPE",
-                            "value": -1
-                        },
-                        "cron": update_schedule,
-                        "timezone": timezone,
-                        "delayAtUpdate": self._get_time_interval_for_delay_string(delay_at_update,
-                                                                                  metric_name,
-                                                                                  update_schedule)
-                    }
                 }
             ],
             "warehouseId": self.warehouse_id,
