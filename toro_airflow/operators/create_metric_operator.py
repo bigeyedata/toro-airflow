@@ -1,3 +1,4 @@
+import datetime
 import logging
 import json
 from functools import reduce
@@ -170,6 +171,14 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                 logging.warning("Delay granularity for date column must be in days, ignoring value")
                 interval_type = "HOURS_TIME_INTERVAL_TYPE"
                 interval_value = hours_from_cron
+            elif interval_type == "WEEKDAYS_TIME_INTERVAL_TYPE":
+                days_since_last_business_day = 0
+                weekday_ordinal = datetime.date.weekday(datetime.date.today() - datetime.timedelta(days=interval_value))
+                # 5 is Saturday, 6 is Sunday
+                if weekday_ordinal >= 5:
+                    days_since_last_business_day = 2
+                interval_type = "HOURS_TIME_INTERVAL_TYPE"
+                interval_value = (days_since_last_business_day + interval_value) * 24 + hours_from_cron
             else:
                 interval_type = "HOURS_TIME_INTERVAL_TYPE"
                 interval_value = interval_value * 24 + hours_from_cron
