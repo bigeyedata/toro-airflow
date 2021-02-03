@@ -177,6 +177,8 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                 # 5 is Saturday, 6 is Sunday
                 if weekday_ordinal >= 5:
                     days_since_last_business_day = 2
+                if datetime.datetime.now().hour <= hours_from_cron:
+                    days_since_last_business_day += 1
                 interval_type = "HOURS_TIME_INTERVAL_TYPE"
                 interval_value = (days_since_last_business_day + interval_value) * 24 + hours_from_cron
             else:
