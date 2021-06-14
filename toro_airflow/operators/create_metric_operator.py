@@ -4,7 +4,7 @@ import json
 from functools import reduce
 
 from airflow.hooks.http_hook import HttpHook
-from airflow.operators.bash_operator import BaseOperator
+from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
 
@@ -208,4 +208,6 @@ class UpsertFreshnessMetricOperator(BaseOperator):
     def _get_max_hours_from_cron(self, cron):
         cron_values = cron.split(" ")
         hours = cron_values[1]
+        if hours == "*":
+            return 0
         return int(hours.split(",")[-1])
