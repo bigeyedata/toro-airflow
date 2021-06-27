@@ -22,14 +22,22 @@ class UpsertFreshnessMetricOperator(BaseOperator):
     #     default_check_frequency_hours: int
 
     @apply_defaults
-    def __init__(self,
-                 connection_id: str,
-                 warehouse_id: int,
-                 configuration: list(dict(schema_name=None, table_name=None, column_name=None,
-                                          update_schedule=None,
-                                          extras=...)),
-                 *args,
-                 **kwargs):
+    def __init__(
+        self,
+        connection_id: str,
+        warehouse_id: int,
+        configuration: list(
+            dict(
+                schema_name=None,
+                table_name=None,
+                column_name=None,
+                update_schedule=None,
+                extras=...,
+            )
+        ),
+        *args,
+        **kwargs
+    ):
         super(UpsertFreshnessMetricOperator, self).__init__(*args, **kwargs)
         self.connection_id = connection_id
         self.warehouse_id = warehouse_id
@@ -49,78 +57,97 @@ class UpsertFreshnessMetricOperator(BaseOperator):
             if table is None or table.get("id") is None:
                 raise Exception("Could not find table: ", schema_name, table_name)
             existing_metric = self._get_existing_freshness_metric(table, column_name)
-            metric = self._get_metric_object(existing_metric, table, notifications, column_name,
-                                             update_schedule, delay_at_update, timezone, default_check_frequency_hours)
+            metric = self._get_metric_object(
+                existing_metric,
+                table,
+                notifications,
+                column_name,
+                update_schedule,
+                delay_at_update,
+                timezone,
+                default_check_frequency_hours,
+            )
             logging.info("Sending metric to create: %s", metric)
-            hook = self.get_hook('POST')
-            result = hook.run("api/v1/metrics",
-                              headers={"Content-Type": "application/json", "Accept": "application/json"},
-                              data=json.dumps(metric))
+            hook = self.get_hook("POST")
+            result = hook.run(
+                "api/v1/metrics",
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                data=json.dumps(metric),
+            )
             logging.info("Create metric status: %s", result.status_code)
             logging.info("Create result: %s", result.json())
 
     def get_hook(self, method) -> HttpHook:
         return HttpHook(http_conn_id=self.connection_id, method=method)
 
-    def _get_metric_object(self, existing_metric, table, notifications, column_name,
-                           update_schedule, delay_at_update, timezone, default_check_frequency_hours):
+    def _get_metric_object(
+        self,
+        existing_metric,
+        table,
+        notifications,
+        column_name,
+        update_schedule,
+        delay_at_update,
+        timezone,
+        default_check_frequency_hours,
+    ):
         metric_name = self._get_metric_name_for_field(table, column_name)
         metric = {
             "scheduleFrequency": {
                 "intervalType": "HOURS_TIME_INTERVAL_TYPE",
-                "intervalValue": default_check_frequency_hours
+                "intervalValue": default_check_frequency_hours,
             },
             "thresholds": [
                 {
                     "freshnessScheduleThreshold": {
                         "bound": {
                             "boundType": "UPPER_BOUND_SIMPLE_BOUND_TYPE",
-                            "value": -1
+                            "value": -1,
                         },
                         "cron": update_schedule,
                         "timezone": timezone,
-                        "delayAtUpdate": self._get_time_interval_for_delay_string(delay_at_update,
-                                                                                  metric_name,
-                                                                                  update_schedule)
+                        "delayAtUpdate": self._get_time_interval_for_delay_string(
+                            delay_at_update, metric_name, update_schedule
+                        ),
                     }
                 }
             ],
             "warehouseId": self.warehouse_id,
             "datasetId": table.get("id"),
-            "metricType": {
-                "predefinedMetric": {
-                    "metricName": metric_name
-                }
-            },
-            "parameters": [
-                {
-                    "key": "arg1",
-                    "columnName": column_name
-                }
-            ],
+            "metricType": {"predefinedMetric": {"metricName": metric_name}},
+            "parameters": [{"key": "arg1", "columnName": column_name}],
             "lookback": {
                 "intervalType": "DAYS_TIME_INTERVAL_TYPE",
-                "intervalValue": 14
+                "intervalValue": 14,
             },
-            "notificationChannels": self._get_notification_channels(notifications)
+            "notificationChannels": self._get_notification_channels(notifications),
         }
         if existing_metric is None:
             return metric
         else:
             existing_metric["thresholds"] = metric["thresholds"]
-            existing_metric["notificationChannels"] = metric.get("notificationChannels", [])
+            existing_metric["notificationChannels"] = metric.get(
+                "notificationChannels", []
+            )
             existing_metric["scheduleFrequency"] = metric["scheduleFrequency"]
             return existing_metric
 
     def _get_existing_freshness_metric(self, table, column_name):
-        hook = self.get_hook('GET')
-        result = hook.run("api/v1/metrics?warehouseIds={warehouse_id}&tableIds={table_id}"
-                          .format(warehouse_id=self.warehouse_id,
-                                  table_id=table.get("id")),
-                          headers={"Accept": "application/json"})
+        hook = self.get_hook("GET")
+        result = hook.run(
+            "api/v1/metrics?warehouseIds={warehouse_id}&tableIds={table_id}".format(
+                warehouse_id=self.warehouse_id, table_id=table.get("id")
+            ),
+            headers={"Accept": "application/json"},
+        )
         metrics = result.json()
         for m in metrics:
-            if self._is_latency_metric(m) and self._is_same_column_metric(m, column_name):
+            if self._is_latency_metric(m) and self._is_same_column_metric(
+                m, column_name
+            ):
                 return m
         return None
 
@@ -133,23 +160,25 @@ class UpsertFreshnessMetricOperator(BaseOperator):
         return result is not None and result.startswith("HOURS_SINCE_MAX")
 
     def _get_table_for_name(self, schema_name, table_name):
-        hook = self.get_hook('GET')
-        result = hook.run("dataset/tables/{warehouse_id}/{schema_name}"
-                          .format(warehouse_id=self.warehouse_id,
-                                  schema_name=schema_name),
-                          headers={"Accept": "application/json"})
+        hook = self.get_hook("GET")
+        result = hook.run(
+            "dataset/tables/{warehouse_id}/{schema_name}".format(
+                warehouse_id=self.warehouse_id, schema_name=schema_name
+            ),
+            headers={"Accept": "application/json"},
+        )
         tables = result.json()
         for t in tables:
-            if t['datasetName'].lower() == table_name.lower():
+            if t["datasetName"].lower() == table_name.lower():
                 return t
         return None
 
     def _get_notification_channels(self, notifications):
         channels = []
         for n in notifications:
-            if n.startswith('#') or n.startswith('@'):
+            if n.startswith("#") or n.startswith("@"):
                 channels.append({"slackChannel": n})
-            elif '@' in n and '.' in n:
+            elif "@" in n and "." in n:
                 channels.append({"email": n})
         return channels
 
@@ -161,31 +190,44 @@ class UpsertFreshnessMetricOperator(BaseOperator):
                 elif f.get("type") == "DATE_LIKE":
                     return "HOURS_SINCE_MAX_DATE"
 
-    def _get_time_interval_for_delay_string(self, delay_at_update, metric_name, update_schedule):
+    def _get_time_interval_for_delay_string(
+        self, delay_at_update, metric_name, update_schedule
+    ):
         split_input = delay_at_update.split(" ")
         interval_value = int(split_input[0])
         interval_type = self._get_proto_interval_type(split_input[1])
         if metric_name == "HOURS_SINCE_MAX_DATE":
             hours_from_cron = self._get_max_hours_from_cron(update_schedule)
-            if interval_type == "HOURS_TIME_INTERVAL_TYPE" or interval_type == "MINUTES_TIME_INTERVAL_TYPE":
-                logging.warning("Delay granularity for date column must be in days, ignoring value")
+            if (
+                interval_type == "HOURS_TIME_INTERVAL_TYPE"
+                or interval_type == "MINUTES_TIME_INTERVAL_TYPE"
+            ):
+                logging.warning(
+                    "Delay granularity for date column must be in days, ignoring value"
+                )
                 interval_type = "HOURS_TIME_INTERVAL_TYPE"
                 interval_value = hours_from_cron
             elif interval_type == "WEEKDAYS_TIME_INTERVAL_TYPE":
-                lookback_weekdays = interval_value + 1 if datetime.datetime.now().hour <= hours_from_cron \
+                lookback_weekdays = (
+                    interval_value + 1
+                    if datetime.datetime.now().hour <= hours_from_cron
                     else interval_value
+                )
                 logging.info("Weekdays to look back ", lookback_weekdays)
-                days_since_last_business_day = self._get_days_since_n_weekdays(datetime.date.today(), lookback_weekdays)
-                logging.info("total days to use for delay ", days_since_last_business_day)
+                days_since_last_business_day = self._get_days_since_n_weekdays(
+                    datetime.date.today(), lookback_weekdays
+                )
+                logging.info(
+                    "total days to use for delay ", days_since_last_business_day
+                )
                 interval_type = "HOURS_TIME_INTERVAL_TYPE"
-                interval_value = (days_since_last_business_day + lookback_weekdays) * 24 + hours_from_cron
+                interval_value = (
+                    days_since_last_business_day + lookback_weekdays
+                ) * 24 + hours_from_cron
             else:
                 interval_type = "HOURS_TIME_INTERVAL_TYPE"
                 interval_value = interval_value * 24 + hours_from_cron
-        return {
-            "intervalValue": interval_value,
-            "intervalType": interval_type
-        }
+        return {"intervalValue": interval_value, "intervalType": interval_type}
 
     def _get_days_since_n_weekdays(self, start_date, n):
         days_since_last_business_day = 0
