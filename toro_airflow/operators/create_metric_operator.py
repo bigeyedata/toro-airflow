@@ -4,7 +4,7 @@ import json
 from functools import reduce
 
 from airflow.hooks.http_hook import HttpHook
-from airflow.operators.bash_operator import BaseOperator
+from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
 
@@ -200,15 +200,13 @@ class CreateMetricOperator(BaseOperator):
                 interval_type = "HOURS_TIME_INTERVAL_TYPE"
                 interval_value = hours_from_cron
             elif interval_type == "WEEKDAYS_TIME_INTERVAL_TYPE":
-                days_since_last_business_day = 0
-                weekday_ordinal = datetime.date.weekday(datetime.date.today() - datetime.timedelta(days=interval_value))
-                # 5 is Saturday, 6 is Sunday
-                if weekday_ordinal >= 5:
-                    days_since_last_business_day = 2
-                if datetime.datetime.now().hour <= hours_from_cron:
-                    days_since_last_business_day += 1
+                lookback_weekdays = interval_value + 1 if datetime.datetime.now().hour <= hours_from_cron \
+                    else interval_value
+                logging.info("Weekdays to look back ", lookback_weekdays)
+                days_since_last_business_day = self._get_days_since_n_weekdays(datetime.date.today(), lookback_weekdays)
+                logging.info("total days to use for delay ", days_since_last_business_day)
                 interval_type = "HOURS_TIME_INTERVAL_TYPE"
-                interval_value = (days_since_last_business_day + interval_value) * 24 + hours_from_cron
+                interval_value = (days_since_last_business_day + lookback_weekdays) * 24 + hours_from_cron
             else:
                 interval_type = "HOURS_TIME_INTERVAL_TYPE"
                 interval_value = interval_value * 24 + hours_from_cron
@@ -216,6 +214,14 @@ class CreateMetricOperator(BaseOperator):
             "intervalValue": interval_value,
             "intervalType": interval_type
         }
+
+    def _get_days_since_n_weekdays(self, start_date, n):
+        days_since_last_business_day = 0
+        weekday_ordinal = datetime.date.weekday(start_date - datetime.timedelta(days=n))
+        # 5 is Saturday, 6 is Sunday
+        if weekday_ordinal >= 5:
+            days_since_last_business_day = 2
+        return days_since_last_business_day
 
     def _get_proto_interval_type(self, interval_type):
         if "minute" in interval_type:
@@ -230,4 +236,6 @@ class CreateMetricOperator(BaseOperator):
     def _get_max_hours_from_cron(self, cron):
         cron_values = cron.split(" ")
         hours = cron_values[1]
+        if hours == "*":
+            return 0
         return int(hours.split(",")[-1])

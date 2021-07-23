@@ -1,7 +1,7 @@
 import logging
 
 from airflow.hooks.http_hook import HttpHook
-from airflow.operators.bash_operator import BaseOperator
+from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
 
